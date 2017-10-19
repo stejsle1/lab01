@@ -43,21 +43,44 @@ def printextra(level, text, label, err):
 @click.group('labelord')                
 @click.help_option('-h', '--help')
 @click.version_option(version='labelord, version 0.1')
-@click.option('-c', '--config', type=click.Path(exists=True), help='Config file')
+@click.option('-c', '--config', type=click.Path(exists=True), help='Config file')    
 @click.option('-t', '--token', help='Token')
-@click.option('--tenv', envvar='GITHUB_TOKEN')
 @click.pass_context
-def cli(ctx, config, token, tenv):
+def cli(ctx, config, token):
    
    conffile = configparser.ConfigParser()
              
    if config is not None:
       conffile.read(config) 
-   else: 
+   else:
       if os.path.isfile('./config.cfg') == True:
          conffile.read('./config.cfg')
          config = './config.cfg'
            
+   
+    # TODO: Add and process required app-wide options
+    # You can/should use context 'ctx' for passing
+    # data and objects to commands
+
+    # Use this session for communication with GitHub
+   session = ctx.obj.get('session', requests.Session())
+   ctx.obj['session'] = session
+   ctx.obj['config'] = config
+
+
+@cli.command()  
+@click.option('-t', '--token', help='Token')
+@click.option('--tenv', envvar='GITHUB_TOKEN')
+@click.pass_context
+def list_repos(ctx, token, tenv):
+   """List repos."""
+   session = ctx.obj['session']
+   config = ctx.obj['config']
+   conffile = configparser.ConfigParser()
+   conffile.optionxform = str   
+   if config is not None and os.path.isfile(config) == True:
+      conffile.read(config)
+   
    if not token:
       if not tenv:
          if os.path.isfile('./config.cfg') == False or not 'github' in conffile:
@@ -70,22 +93,7 @@ def cli(ctx, config, token, tenv):
       else: t = tenv
    else: t = token
    
-    # TODO: Add and process required app-wide options
-    # You can/should use context 'ctx' for passing
-    # data and objects to commands
-
-    # Use this session for communication with GitHub
-   session = ctx.obj.get('session', requests.Session())
    session = setup(session, t)
-   ctx.obj['session'] = session
-   ctx.obj['config'] = config
-
-
-@cli.command()   
-@click.pass_context
-def list_repos(ctx):
-   """List repos."""
-   session = ctx.obj['session'] 
 
    repos = session.get('https://api.github.com/user/repos?per_page=100&page=1')
    a = 0
@@ -113,11 +121,33 @@ def list_repos(ctx):
 
 
 @cli.command()
-@click.argument('repository', required=1) 
+@click.argument('repository', required=1)
+@click.option('-t', '--token', help='Token')
+@click.option('--tenv', envvar='GITHUB_TOKEN')
 @click.pass_context
-def list_labels(ctx, repository):
+def list_labels(ctx, repository, token, tenv):
    """List labels."""
-   session = ctx.obj['session'] 
+   session = ctx.obj['session']
+   config = ctx.obj['config']
+   conffile = configparser.ConfigParser()
+   conffile.optionxform = str
+   if config is not None and os.path.isfile(config) == True:
+      conffile.read(config) 
+   
+   if not token:
+      if not tenv:
+         if os.path.isfile('./config.cfg') == False or not 'github' in conffile:
+            print('No GitHub token has been provided', file=sys.stderr)
+            sys.exit(3)
+         if 'github' in conffile and not 'token' in conffile['github']:
+            print('No GitHub token has been provided', file=sys.stderr)
+            sys.exit(3)
+         else: t = conffile['github']['token']
+      else: t = tenv
+   else: t = token
+   
+   session = setup(session, t)
+   
    a = 0
    list = session.get('https://api.github.com/repos/' + repository + '/labels?per_page=100&page=1')
    if list.status_code == 404:
@@ -155,15 +185,32 @@ def list_labels(ctx, repository):
 @click.option('-a', '--all-repos', is_flag=True, help='All available repos.')
 @click.option('-d', '--dry-run', is_flag=True, help='Dry run')
 @click.option('-v', '--verbose', is_flag=True, help='Verbose mode')
-@click.option('-q', '--quiet', is_flag=True, help='Quiet mode') 
+@click.option('-q', '--quiet', is_flag=True, help='Quiet mode')
+@click.option('-t', '--token', help='Token')
+@click.option('--tenv', envvar='GITHUB_TOKEN')
 @click.pass_context
-def run(ctx, mode, template_repo, all_repos, dry_run, verbose, quiet):
+def run(ctx, mode, template_repo, all_repos, dry_run, verbose, quiet, token, tenv):
    
    config = ctx.obj['config']
    conffile = configparser.ConfigParser()
    conffile.optionxform = str
-   conffile.read(config) 
+   if config is not None and os.path.isfile(config) == True:
+      conffile.read(config)
    session = ctx.obj['session']
+   
+   if not token:
+      if not tenv:
+         if os.path.isfile('./config.cfg') == False or not 'github' in conffile:
+            print('No GitHub token has been provided', file=sys.stderr)
+            sys.exit(3)
+         if 'github' in conffile and not 'token' in conffile['github']:
+            print('No GitHub token has been provided', file=sys.stderr)
+            sys.exit(3)
+         else: t = conffile['github']['token']
+      else: t = tenv
+   else: t = token  
+   
+   session = setup(session, t)
    
    repos = []
    errors = 0

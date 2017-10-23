@@ -83,10 +83,10 @@ def list_repos(ctx, token, tenv):
    
    if not token:
       if not tenv:
-         if os.path.isfile('./config.cfg') == False or not 'github' in conffile:
+         if os.path.isfile('./config.cfg') == False and 'github' not in conffile:
             print('No GitHub token has been provided', file=sys.stderr)
             sys.exit(3)
-         if 'github' in conffile and not 'token' in conffile['github']:
+         if 'github' in conffile and 'token' not in conffile['github']:
             print('No GitHub token has been provided', file=sys.stderr)
             sys.exit(3)
          else: t = conffile['github']['token']
@@ -136,10 +136,10 @@ def list_labels(ctx, repository, token, tenv):
    
    if not token:
       if not tenv:
-         if os.path.isfile('./config.cfg') == False or not 'github' in conffile:
+         if os.path.isfile('./config.cfg') == False and 'github' not in conffile:
             print('No GitHub token has been provided', file=sys.stderr)
             sys.exit(3)
-         if 'github' in conffile and not 'token' in conffile['github']:
+         if 'github' in conffile and 'token' not in conffile['github']:
             print('No GitHub token has been provided', file=sys.stderr)
             sys.exit(3)
          else: t = conffile['github']['token']
@@ -200,10 +200,10 @@ def run(ctx, mode, template_repo, all_repos, dry_run, verbose, quiet, token, ten
    
    if not token:
       if not tenv:
-         if os.path.isfile('./config.cfg') == False or not 'github' in conffile:
+         if os.path.isfile('./config.cfg') == False and 'github' not in conffile:
             print('No GitHub token has been provided', file=sys.stderr)
             sys.exit(3)
-         if 'github' in conffile and not 'token' in conffile['github']:
+         if 'github' in conffile and 'token' not in conffile['github']:
             print('No GitHub token has been provided', file=sys.stderr)
             sys.exit(3)
          else: t = conffile['github']['token']
@@ -258,7 +258,8 @@ def run(ctx, mode, template_repo, all_repos, dry_run, verbose, quiet, token, ten
          else: 
             # update labels z configu
             for label in conffile['labels']:
-               labels[label] = conffile['labels'][label]      
+               labels[label] = conffile['labels'][label]   
+            labels_lower = {k.lower():v for k,v in labels.items()}      
       else: 
          # update template repo z configu
          list = session.get('https://api.github.com/repos/' + conffile['others']['template-repo'] + '/labels?per_page=100&page=1')
@@ -267,6 +268,7 @@ def run(ctx, mode, template_repo, all_repos, dry_run, verbose, quiet, token, ten
             errors = errors + 1
          for label in list.json():
             labels[label['name']] = label['color']
+         labels_lower = {k.lower():v for k,v in labels.items()}     
    else: 
       # update --template-repo z prepinace
       list = session.get('https://api.github.com/repos/' + template_repo + '/labels?per_page=100&page=1')
@@ -274,7 +276,8 @@ def run(ctx, mode, template_repo, all_repos, dry_run, verbose, quiet, token, ten
          printextra(level, template_repo + '; ' + str(list.status_code) + ' - ' + list.json()['message'], 'LBL', 1)
          errors = errors + 1
       for label in list.json():
-         labels[label['name']] = label['color']
+         labels[label['name']] = label['color'] 
+      labels_lower = {k.lower():v for k,v in labels.items()}  
    
    for repo in repos:
       sum = sum + 1
@@ -285,14 +288,17 @@ def run(ctx, mode, template_repo, all_repos, dry_run, verbose, quiet, token, ten
          errors = errors + 1
          continue
       for label in list.json():
-         if label['name'] in labels:
-            if labels[label['name']] != label['color']:
-               colors = json.dumps({"name": label['name'], "color": labels[label['name']]})
+         if label['name'] in labels_lower:
+            for l in labels:
+               if l.lower() == label['name']:
+                  break
+            if labels_lower[label['name']] != label['color']:
+               colors = json.dumps({"name": l, "color": labels_lower[label['name']]})
                if not dry_run: req = session.patch('https://api.github.com/repos/' + repo + '/labels/' + label['name'].lower(), data=colors) 
                if dry_run or req.status_code == 200:
-                  printextra(level, repo + '; ' + label['name'] + '; ' + labels[label['name']], 'UPD', err)
+                  printextra(level, repo + '; ' + l + '; ' + labels_lower[label['name']], 'UPD', err)
                else:
-                  printextra(level, repo + '; ' + label['name'] + '; ' + labels[label['name']] + '; ' + str(req.status_code) + ' - ' + req.json()['message'], 'UPD', 1)
+                  printextra(level, repo + '; ' + l + '; ' + labels_lower[label['name']] + '; ' + str(req.status_code) + ' - ' + req.json()['message'], 'UPD', 1)
                   errors = errors + 1
          elif mode == 'replace':
             if not dry_run: req = session.delete('https://api.github.com/repos/' + repo + '/labels/' + label['name'])
@@ -303,7 +309,7 @@ def run(ctx, mode, template_repo, all_repos, dry_run, verbose, quiet, token, ten
                errors = errors + 1
       for label in labels:
          for label2 in list.json():
-            if label == label2['name']: ok = 1
+            if label.lower() == label2['name']: ok = 1
          if ok != 1: 
             colors = json.dumps({"name": label, "color": labels[label]})
             if not dry_run: req = session.post('https://api.github.com/repos/' + repo + '/labels', data=colors) 
